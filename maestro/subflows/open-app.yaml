@@ -1,0 +1,9 @@
+# Starts the app from a clean state. If the app gets a login, add a `runFlow: login.yaml` here
+# with `when: visible: "<login screen text>"`; credentials come from MAESTRO_* env variables
+# (~/.config/<project>/test.env), never from this repository.
+appId: com.example.template
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow

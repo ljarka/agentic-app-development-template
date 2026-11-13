@@ -1,0 +1,9 @@
+# Device smoke test: clean install, the app starts and shows its first screen.
+# Extend it with every new top-level destination (one assert per tab/screen).
+# Run: ./scripts/maestro-smoke.sh   (see docs/playbooks/device-testing.md)
+appId: com.example.template
+name: Smoke — app starts
+---
+- runFlow: subflows/open-app.yaml
+- assertVisible: "Home"
+- assertVisible: "Your app starts here"

@@ -1,0 +1,8 @@
+broad_catch=0
+while_true=0
+run_blocking=0
+global_scope=0
+thread_sleep=0
+not_null_assert=0
+todo=0
+large_files=0

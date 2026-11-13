@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Maven Central occasionally times out from runners; be patient and retry.
+  GRADLE_OPTS: >-
+    -Dorg.gradle.internal.http.connectionTimeout=60000
+    -Dorg.gradle.internal.http.socketTimeout=120000
+    -Dorg.gradle.internal.repository.max.retries=5
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android app
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # services.gradle.org sometimes stalls from runners; retry fetching Gradle first.
+      - name: Download Gradle
+        run: |
+          for attempt in 1 2 3; do
+            ./gradlew --version && exit 0
+            echo "Gradle download failed (attempt $attempt), retrying in 15 s"
+            sleep 15
+          done
+          exit 1
+
+      - name: Architecture boundaries check
+        run: ./scripts/check-modular-boundaries.sh
+
+      # Blocks wide pull requests; on a push to main (already merged) it only warns.
+      - name: Change scope guardrail
+        id: scope_guard
+        continue-on-error: ${{ github.event_name == 'push' }}
+        run: bash ./scripts/check-agent-change-scope.sh
+        env:
+          DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          DIFF_HEAD: ${{ github.sha }}
+
+      - name: Secret scan (diff)
+        id: secret_scan
+        run: bash ./scripts/check-no-secrets-in-diff.sh
+        env:
+          DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          DIFF_HEAD: ${{ github.sha }}
+
+      - name: Debt radar
+        run: STRICT=1 ./scripts/debt-radar.sh
+
+      # verifyPaparazziDebug runs the unit tests and compares screenshots with the checked-in goldens.
+      - name: Code style, unit tests, screenshots, lint, build
+        id: android_checks
+        run: ./gradlew ktlintCheck testDebugUnitTest verifyPaparazziDebug lintDebug assembleDebug
+
+      - name: Collect agent KPI snapshot
+        if: always()
+        run: python3 ./scripts/collect-agent-kpi.py --output build/agent-kpi/agent-kpi.json
+        env:
+          DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          DIFF_HEAD: ${{ github.sha }}
+          SCOPE_GUARD_STATUS: ${{ steps.scope_guard.outcome }}
+          SECRET_SCAN_STATUS: ${{ steps.secret_scan.outcome }}
+          ANDROID_CHECKS_STATUS: ${{ steps.android_checks.outcome }}
+
+      - name: Upload agent KPI snapshot
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: agent-kpi-snapshot
+          path: build/agent-kpi/agent-kpi.json
+          if-no-files-found: ignore
+
+      - name: Upload reports and screenshot diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-reports
+          path: |
+            **/build/reports/
+            **/build/paparazzi/failures/
+          if-no-files-found: ignore
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+  # Uncomment when the project gets a backend in server/ (docs/BOOTSTRAP.md, "Backend").
+  # Test on every runtime version you deploy to (playbook rule 7).
+  # server:
+  #   name: Server (Python ${{ matrix.python }})
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix:
+  #       python: ["3.11", "3.13"]
+  #   defaults:
+  #     run:
+  #       working-directory: server
+  #   steps:
+  #     - uses: actions/checkout@v7
+  #     - uses: actions/setup-python@v7
+  #       with:
+  #         python-version: ${{ matrix.python }}
+  #     - run: pip install -r requirements.txt
+  #     - run: python -m unittest discover -s tests -v

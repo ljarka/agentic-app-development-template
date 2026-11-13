@@ -1,0 +1,11 @@
+# Critical paths that need explicit owner review (playbook rule 16). Keep in sync with
+# scripts/critical-paths.txt. Replace OWNER with your GitHub user or team and uncomment.
+#
+# /app/src/main/kotlin/com/example/template/AppNavigation.kt  @OWNER
+# /app/src/main/kotlin/com/example/template/AppModule.kt      @OWNER
+# /app/src/main/AndroidManifest.xml                           @OWNER
+# /build-logic/                                               @OWNER
+# /gradle/libs.versions.toml                                  @OWNER
+# /.github/workflows/                                         @OWNER
+# /scripts/                                                   @OWNER
+# /docs/decisions/                                            @OWNER

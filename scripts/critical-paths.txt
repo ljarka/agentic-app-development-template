@@ -1,0 +1,10 @@
+# Paths where an agent change needs a small blast radius and explicit owner review.
+# Used by scripts/check-agent-change-scope.sh (prefix match). Keep in sync with .github/CODEOWNERS.
+app/src/main/kotlin/com/example/template/AppNavigation.kt
+app/src/main/kotlin/com/example/template/AppModule.kt
+app/src/main/AndroidManifest.xml
+build-logic/
+gradle/libs.versions.toml
+.github/workflows/
+scripts/
+docs/decisions/
