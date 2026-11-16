@@ -15,7 +15,7 @@ ok() { echo "  [OK] $*"; }
 
 MODULES=()
 while IFS= read -r m; do MODULES+=("$m"); done < <(
-  sed -n 's/^include("\(:[^"]*\)")/\1/p' settings.gradle.kts
+  sed -n 's/^[[:space:]]*include[[:space:]]*([[:space:]]*"\(:[^"]*\)"[[:space:]]*)/\1/p' settings.gradle.kts
 )
 dir_of() { local p="${1#:}"; echo "${p//://}"; }
 
@@ -76,10 +76,14 @@ done
 [ "$FAILED" -eq 0 ] && ok "core layering respected"
 
 echo "4. Only :app depends on features"
+check4_failed=0
 for f in core/*/build.gradle.kts; do
-  [ -f "$f" ] && grep -qE 'project\(":feature:' "$f" && fail "$f depends on a feature"
+  if [ -f "$f" ] && grep -qE 'project\(":feature:' "$f"; then
+    fail "$f depends on a feature"
+    check4_failed=1
+  fi
 done
-ok "checked"
+[ "$check4_failed" -eq 0 ] && ok "only :app depends on features"
 
 echo "5. Design tokens: no color literals in features (use MaterialTheme.colorScheme)"
 if ls -d feature/*/src/main >/dev/null 2>&1 && grep -rnE 'Color\(0x[0-9A-Fa-f]{6,8}\)' feature/*/src/main; then

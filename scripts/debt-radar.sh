@@ -21,7 +21,9 @@ CHECKS="$(printf '%s\t%s\t%s\n' \
   'not_null_assert' '[a-zA-Z0-9_)]!!' '!! crashes instead of handling null' \
   'todo' '(TODO|FIXME)' 'unfinished work left in code')"
 
-FILES="$(find app core feature -path '*/src/main/*' -name '*.kt' -not -path '*/build/*' 2>/dev/null || true)"
+SEARCH_DIRS="app core feature"
+[ -d server ] && SEARCH_DIRS="$SEARCH_DIRS server"
+FILES="$(find $SEARCH_DIRS -path '*/src/main/*' -name '*.kt' -not -path '*/build/*' 2>/dev/null || true)"
 count() {
   [ -z "$FILES" ] && { echo 0; return; }
   echo "$FILES" | { xargs grep -nE "$1" 2>/dev/null || true; } | wc -l | tr -d " "

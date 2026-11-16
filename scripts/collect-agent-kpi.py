@@ -48,15 +48,23 @@ def collect_junit() -> dict:
     reports = glob.glob("**/build/test-results/**/TEST-*.xml", recursive=True)
     totals = Counter(tests=0, failures=0, errors=0, skipped=0)
 
+    def safe_int(val: str | None) -> int:
+        try:
+            return int(val or 0)
+        except (ValueError, TypeError):
+            return 0
+
     for report in reports:
         try:
             root = ET.parse(report).getroot()
         except ET.ParseError:
             continue
-        totals["tests"] += int(root.attrib.get("tests", 0))
-        totals["failures"] += int(root.attrib.get("failures", 0))
-        totals["errors"] += int(root.attrib.get("errors", 0))
-        totals["skipped"] += int(root.attrib.get("skipped", 0))
+        suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+        for suite in suites:
+            totals["tests"] += safe_int(suite.attrib.get("tests"))
+            totals["failures"] += safe_int(suite.attrib.get("failures"))
+            totals["errors"] += safe_int(suite.attrib.get("errors"))
+            totals["skipped"] += safe_int(suite.attrib.get("skipped"))
 
     return {
         "reports_count": len(reports),

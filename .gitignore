@@ -12,4 +12,8 @@ local.properties
 # Secrets never live in the repository
 *.jks
 *.keystore
+*.p12
+*.key
+*.pem
 .env
+.env.*

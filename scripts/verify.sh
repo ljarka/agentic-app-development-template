@@ -30,10 +30,7 @@ step "Debt radar"
 
 if git rev-parse --verify HEAD >/dev/null 2>&1 && [ -n "$(git status --porcelain)" ]; then
   step "Secret scan (uncommitted changes)"
-  if git diff HEAD | grep -nE '^\+.*(AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{36,}|AIza[0-9A-Za-z_-]{35}|-----BEGIN .*PRIVATE KEY-----)'; then
-    echo "[ERROR] Possible secret in uncommitted changes (above)."; exit 1
-  fi
-  echo "[OK] No high-confidence secrets in uncommitted changes."
+  ./scripts/check-no-secrets-in-diff.sh --uncommitted
 fi
 
 printf '\n\033[1;32mAll checks passed.\033[0m Remaining DoD items: module AGENTS.md, ADR/task/STATUS updates.\n'

@@ -2,46 +2,66 @@
 # Scans only the ADDED lines of a diff for high-confidence secrets (playbook rule 15).
 #   ./scripts/check-no-secrets-in-diff.sh                 # last commit
 #   ./scripts/check-no-secrets-in-diff.sh origin/main HEAD
+#   ./scripts/check-no-secrets-in-diff.sh --uncommitted   # uncommitted/working tree changes
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-BASE_REF="${DIFF_BASE:-${1:-}}"
-HEAD_REF="${DIFF_HEAD:-${2:-}}"
-
-if [[ -z "$BASE_REF" || -z "$HEAD_REF" ]]; then
-  if [[ -n "${GITHUB_BASE_REF:-}" && -n "${GITHUB_SHA:-}" ]]; then
-    BASE_REF="origin/${GITHUB_BASE_REF}"
-    HEAD_REF="${GITHUB_SHA}"
-  else
-    BASE_REF="HEAD~1"
-    HEAD_REF="HEAD"
-  fi
-fi
-
-if ! git rev-parse --verify "${BASE_REF}^{commit}" >/dev/null 2>&1; then
-  echo "[WARN] Cannot resolve base ref '${BASE_REF}', skipping secret diff scan."
-  exit 0
-fi
-if ! git rev-parse --verify "${HEAD_REF}^{commit}" >/dev/null 2>&1; then
-  echo "[WARN] Cannot resolve head ref '${HEAD_REF}', skipping secret diff scan."
-  exit 0
-fi
-
-DIFF_RANGE="${BASE_REF}...${HEAD_REF}"
-
-echo "=== Secret scan (added lines only) ==="
-echo "Diff range: $DIFF_RANGE"
-
 TMP_DIFF_FILE="$(mktemp)"
 trap 'rm -f "$TMP_DIFF_FILE"' EXIT
-git diff --unified=0 --no-color "$DIFF_RANGE" > "$TMP_DIFF_FILE"
 
-# Binary secrets: a keystore or a local env file must never be committed.
-if git diff --name-only --diff-filter=A "$DIFF_RANGE" | grep -E '\.(jks|keystore|p12)$|(^|/)\.env$|local\.properties$'; then
-  echo "[ERROR] Keystore / .env / local.properties added to the repository (see above)."
-  exit 1
+if [[ "${1:-}" == "--uncommitted" ]]; then
+  if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+    echo "[WARN] No commits in repository yet, skipping uncommitted secret scan."
+    exit 0
+  fi
+  if [[ -z "$(git status --porcelain)" ]]; then
+    echo "[OK] Working tree clean, no uncommitted changes to scan."
+    exit 0
+  fi
+  echo "=== Secret scan (uncommitted changes) ==="
+  git diff --unified=0 --no-color HEAD > "$TMP_DIFF_FILE"
+
+  if git status --porcelain | grep -E '\.(jks|keystore|p12|key|pem)$|(^|[[:space:]])\.env(\.|$)|local\.properties$'; then
+    echo "[ERROR] Keystore / .env / local.properties found in uncommitted changes (see above)."
+    exit 1
+  fi
+else
+  BASE_REF="${DIFF_BASE:-${1:-}}"
+  HEAD_REF="${DIFF_HEAD:-${2:-}}"
+
+  if [[ -z "$BASE_REF" || -z "$HEAD_REF" ]]; then
+    if [[ -n "${GITHUB_BASE_REF:-}" && -n "${GITHUB_SHA:-}" ]]; then
+      BASE_REF="origin/${GITHUB_BASE_REF}"
+      HEAD_REF="${GITHUB_SHA}"
+    else
+      BASE_REF="HEAD~1"
+      HEAD_REF="HEAD"
+    fi
+  fi
+
+  if ! git rev-parse --verify "${BASE_REF}^{commit}" >/dev/null 2>&1; then
+    echo "[WARN] Cannot resolve base ref '${BASE_REF}', skipping secret diff scan."
+    exit 0
+  fi
+  if ! git rev-parse --verify "${HEAD_REF}^{commit}" >/dev/null 2>&1; then
+    echo "[WARN] Cannot resolve head ref '${HEAD_REF}', skipping secret diff scan."
+    exit 0
+  fi
+
+  DIFF_RANGE="${BASE_REF}...${HEAD_REF}"
+
+  echo "=== Secret scan (added lines only) ==="
+  echo "Diff range: $DIFF_RANGE"
+
+  git diff --unified=0 --no-color "$DIFF_RANGE" > "$TMP_DIFF_FILE"
+
+  # Binary secrets: a keystore or a local env file must never be committed.
+  if git diff --name-only --diff-filter=A "$DIFF_RANGE" | grep -E '\.(jks|keystore|p12|key|pem)$|(^|/)\.env(\.|$)|local\.properties$'; then
+    echo "[ERROR] Keystore / .env / local.properties added to the repository (see above)."
+    exit 1
+  fi
 fi
 
 python3 - "$TMP_DIFF_FILE" <<'PY'
